@@ -1,0 +1,169 @@
+﻿@page "/"
+
+<div style="display:flex; justify-content: center"> 
+    @if (!nameConfirmed)
+    {
+        <div style="margin-top: 25vh; display: inline-grid">
+            <RadzenTextBox Style="margin-bottom: 8px" @oninput="args => nameInput = args.Value.ToString()" Placeholder="Name"></RadzenTextBox>
+            <RadzenButton Click="ConfirmName" Text="Login"></RadzenButton>
+        </div>
+    }
+    else if(!submitted)
+    {
+
+        <div style="margin-top: 25vh">
+            @foreach (var question in questions)
+            {
+                <RadzenCard Visible="@(currentQuestion == question.Number)" Style="margin-bottom: 8px; max-width: 500px">
+                    <RadzenLabel Style="border-bottom: solid" Text="@question.Text"></RadzenLabel>
+                    <br/>
+                    <RadzenRadioButtonList Change="RadioChanged" @bind-Value="@question.AnswerPoints" TValue="int?" Orientation="Orientation.Vertical">
+                        <Items>
+                            <RadzenRadioButtonListItem Text="Trifft jetzt, und in jungen jahren zu" Value="@question.PointsPerAnswer[0]" TValue="int?"></RadzenRadioButtonListItem>
+                            <RadzenRadioButtonListItem Text="Trifft nur jetzt zu" Value="@question.PointsPerAnswer[1]" TValue="int?"></RadzenRadioButtonListItem>
+                            <RadzenRadioButtonListItem Text="Traf nur unter 16 Jahren zu" Value="@question.PointsPerAnswer[2]" TValue="int?"></RadzenRadioButtonListItem>
+                            <RadzenRadioButtonListItem Text="Traf nie zu" Value="@question.PointsPerAnswer[3]" TValue="int?"></RadzenRadioButtonListItem>
+                        </Items>
+                    </RadzenRadioButtonList>
+                    
+                    <div style="display: flex; flex-wrap: wrap; justify-content: space-evenly" >
+                        
+                        <RadzenButton Disabled="@(currentQuestion == 1)" Text="Zurück" Click="Back"> </RadzenButton>
+
+                        @if (currentQuestion == questions.Count)
+                        {
+                            <RadzenButton Disabled="@(radioHasntChanged)" ButtonType="ButtonType.Submit" Text="Fertig" Click="Submit"> </RadzenButton>
+                        }
+                        else
+                        {
+                            <RadzenButton Disabled="@(radioHasntChanged)" Text="Weiter" Click="Next"> </RadzenButton>
+                        }
+                    </div>
+                </RadzenCard>
+            }
+        </div>
+        
+    }
+    else
+    {
+        <div style="margin-left: 50%; margin-top: 25%; translate: -50% -50%; display: inline-grid">
+            <RadzenLabel Text="@pointText" ></RadzenLabel>
+        </div>
+    }
+</div>
+
+
+@code {
+    string nameInput;
+    bool nameConfirmed;
+    bool submitted;
+    string pointText;
+    bool radioHasntChanged;
+
+    int currentQuestion;
+    
+    List<Question> questions = new List<Question>();
+    
+
+    protected override void OnInitialized()
+    {
+        currentQuestion = 1;
+        submitted = false;
+        nameConfirmed = false;
+        radioHasntChanged = true;
+        
+        var lines = File.ReadAllLines("Data/QuestionsAndWeights.csv");
+        
+        foreach (var line in lines)
+        {
+            var parts = line.Split(';');
+            var curQuestion = new Question(Convert.ToInt32(parts[0]), parts[1], ParseRange(parts[2..]));
+            questions.Add(curQuestion);
+        }
+        
+    }
+
+    private void ConfirmName()
+    {
+        if (nameInput is "" or null) return;
+        Console.WriteLine(nameInput);
+        nameConfirmed = true;
+    }
+    
+    private void Submit()
+    {
+        int score = 0;
+        foreach (var question in questions)
+        {
+            if (question.AnswerPoints != null)
+            {
+                score += (int)question.AnswerPoints;
+            }
+        }
+
+        pointText = "Punkte: " + score;
+        
+        File.AppendAllLines("Data/Results.txt", new[] { nameInput + " | " + score });
+        
+        submitted = true;
+    }
+    
+    class Question
+    {
+        public Question(int number, string text, int[] pointsPerAnswer)
+        {
+            Number = number;
+            Text = text;
+            PointsPerAnswer = pointsPerAnswer;
+        }
+        
+        public int Number { get; set; }
+        public string Text { get; set; }
+        public int[] PointsPerAnswer { get; set; }
+
+        public int? AnswerPoints { get; set; } //amount of points from the selected answer
+
+        public string ToCsv()
+        {
+            return Number + ";" + Text + ";" + PointsPerAnswer[0] + ";" + PointsPerAnswer[1] + ";" + PointsPerAnswer[2] + ";" + PointsPerAnswer[3];
+        }
+    }
+    
+    public static string GetNumbers(string inputString)
+    {
+        return inputString.ToCharArray().Where(c => c is '0' or '1' or '2' or '3' or '4' or '5' or '6' or '7' or '8' or '9').Aggregate("", (current, c) => current + c);
+    }
+
+
+    private void Next()
+    {
+        if (currentQuestion == questions.Count) return;
+        radioHasntChanged = true;
+        currentQuestion++;
+        InvokeAsync(StateHasChanged);
+    }
+
+    private void Back()
+    {
+        //avoiding negative numbers has been handled by not showing the button
+        currentQuestion--;
+        InvokeAsync(StateHasChanged);
+    }
+
+    private void RadioChanged()
+    {
+        radioHasntChanged = false;
+    }
+
+    public int[] ParseRange(string[] input)
+    {
+        var output = new List<int>();
+
+        foreach (var s in input)
+        {
+            output.Add(int.Parse(s));
+        }
+            
+        return output.ToArray();
+    }
+}
